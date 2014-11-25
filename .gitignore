@@ -1,0 +1,5 @@
+Lines/Debug/
+Lines/Release/
+*.cppproj
+*.atsln
+*.atsuo

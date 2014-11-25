@@ -120,6 +120,11 @@ int main(void) {
 				uint8_t accel_temp_gyro_data[14];
 				uint8_t mag_data[7]; //Need to read ST2
 				
+				const uint8_t bytes_count_size = sizeof(bytes_count);
+				const uint8_t time_size = sizeof(time);
+				const uint8_t accel_temp_gyro_data_size = sizeof(accel_temp_gyro_data);
+				const uint8_t mag_data_size = sizeof(mag_data);
+				
 				UINT bw;
 				
 				//Get gyroscope offset
@@ -146,7 +151,7 @@ int main(void) {
 					bytes_count = 0;
 					while (tenth_ms < time + 10);
 					time = tenth_ms;
-					bytes_count += sizeof(time);
+					bytes_count += time_size;
 				
 					LED_H(); //LED turns on indicating first read
 				
@@ -154,7 +159,7 @@ int main(void) {
 					ra = 0x3B;
 					I2C_Write(0x68, &ra, 1); //RA for ACCEL_XOUT_H
 					I2C_Read(0x68, accel_temp_gyro_data, 14);
-					bytes_count += sizeof(accel_temp_gyro_data);
+					bytes_count += accel_temp_gyro_data_size;
 				
 					//Magnetometer
 					ra = 0x02;
@@ -164,14 +169,14 @@ int main(void) {
 						ra = 0x03;
 						I2C_Write(0x0C, &ra, 1); //RA for AK8963_XOUT_L
 						I2C_Read(0x0C, mag_data, 7);
-						bytes_count += sizeof(mag_data) - 1;
+						bytes_count += mag_data_size - 1;
 					}
 					
-					f_write(&Fil, &bytes_count, sizeof(bytes_count), &bw);
-					f_write(&Fil, &time, sizeof(time), &bw);
-					f_write(&Fil, &accel_temp_gyro_data, sizeof(accel_temp_gyro_data), &bw);
+					f_write(&Fil, &bytes_count, bytes_count_size, &bw);
+					f_write(&Fil, &time, time_size, &bw);
+					f_write(&Fil, &accel_temp_gyro_data, accel_temp_gyro_data_size, &bw);
 					if (mag_drdy) {
-						f_write(&Fil, &mag_data, sizeof(mag_data) - 1, &bw);
+						f_write(&Fil, &mag_data, mag_data_size - 1, &bw);
 					}
 				}
 				f_close(&Fil);

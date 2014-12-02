@@ -11,6 +11,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+#include "ADC.h"
 #include "I2C.h"
 #include "USART.h"
 
@@ -21,10 +22,14 @@ extern "C" {
 #define DB_INIT()	DDRC  |= (1 << PORTC0)
 #define	DB_H()		PORTC |= (1 << PORTC0)
 #define DB_L()		PORTC &= ~(1 << PORTC0)
-
+/*
 #define LED_INIT()	DDRC  |= (1 << PORTC0)
 #define	LED_H()		PORTC |= (1 << PORTC0)
 #define LED_L()		PORTC &= ~(1 << PORTC0)
+*/
+#define LED_INIT()
+#define	LED_H()
+#define LED_L()
 
 #define BUTTON_PRESS()	!(PINC & (1 << PINC1))
 
@@ -71,6 +76,9 @@ int main(void) {
 	PCICR = (1 << PCIE1);
 	PCMSK1 = (1 << PCINT9); //Button
 	
+	PORTC &= ~((1 << PORTC0)|(1 << PORTC2)|(1 << PORTC3));
+	DIDR0 |= (1 << ADC0D)|(1 << ADC2D)|(1 << ADC3D);
+	
 	sei(); //Enable global interrupts
 	
 	//========== MPU-9250 Config ==========
@@ -89,6 +97,14 @@ int main(void) {
 
 	while(1) {
 		while (!button_event());
+		/*
+		while (!button_event()) {
+			uint8_t adc[2];
+			ADC_Read(0, adc + 1, adc);
+			uint16_t val = (uint16_t(adc[1]) << 8) | adc[0];
+			USART_Transmit("%u\n", val);	
+		}
+		*/
 	
 		//========== FAT FS Start ==========
 		FATFS FatFs;
@@ -104,12 +120,15 @@ int main(void) {
 				sprintf(path, "%05u", ++file_number);
 			}
 			USART_Transmit("Using %s\n", path);
+			/*
 			for (uint16_t i = 0; i < file_number; i++) {
 				LED_H();
 				_delay_ms(100);
 				LED_L();
 				_delay_ms(100);
 			}
+			*/
+			_delay_ms(1000);
 			
 			if (f_open(&Fil, path, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
 				uint8_t ra;
@@ -119,11 +138,14 @@ int main(void) {
 				uint32_t time = 0;
 				uint8_t accel_temp_gyro_data[14];
 				uint8_t mag_data[7]; //Need to read ST2
+				//uint16_t adc_data[3];
+				uint8_t adc_data[6];
 				
 				const uint8_t bytes_count_size = sizeof(bytes_count);
 				const uint8_t time_size = sizeof(time);
 				const uint8_t accel_temp_gyro_data_size = sizeof(accel_temp_gyro_data);
 				const uint8_t mag_data_size = sizeof(mag_data);
+				const uint8_t adc_data_size = sizeof(adc_data);
 				
 				UINT bw;
 				
@@ -149,7 +171,7 @@ int main(void) {
 				//Loop
 				while (!button_event()) {
 					bytes_count = 0;
-					while (tenth_ms < time + 10);
+					while (tenth_ms < time + 20);
 					time = tenth_ms;
 					bytes_count += time_size;
 				
@@ -172,11 +194,24 @@ int main(void) {
 						bytes_count += mag_data_size - 1;
 					}
 					
+					//ADC a.k.a. Force
+					/*for (uint8_t i = 0; i < 3; i++) {
+						//adc_data[i] = ADC_Read(i);
+						ADC_Read(i, adc_data + 2*i + 1, adc_data+ 2*i);
+					}
+					*/
+					ADC_Read(0, adc_data + 1, adc_data);
+					ADC_Read(2, adc_data + 3, adc_data + 2);
+					ADC_Read(3, adc_data + 5, adc_data + 4);
+					bytes_count += adc_data_size;
+					
+					//Output
 					f_write(&Fil, &bytes_count, bytes_count_size, &bw);
 					f_write(&Fil, &time, time_size, &bw);
-					f_write(&Fil, &accel_temp_gyro_data, accel_temp_gyro_data_size, &bw);
+					f_write(&Fil, accel_temp_gyro_data, accel_temp_gyro_data_size, &bw);
+					f_write(&Fil, adc_data, adc_data_size, &bw);
 					if (mag_drdy) {
-						f_write(&Fil, &mag_data, mag_data_size - 1, &bw);
+						f_write(&Fil, mag_data, mag_data_size - 1, &bw);
 					}
 				}
 				f_close(&Fil);
